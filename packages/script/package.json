@@ -1,0 +1,24 @@
+{
+  "name": "script",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "profiler": "tsx src/profiler.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "dotenv": "^16.0.3",
+    "helius-sdk": "^2.0.5",
+    "typescript": "^5.9.2",
+    "@coral-xyz/anchor": "^0.32.1",
+    "arcium_sdk": "*"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0"
+  }
+}
