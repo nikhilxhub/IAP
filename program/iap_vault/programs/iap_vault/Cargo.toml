@@ -25,6 +25,7 @@ arcium-client = { default-features = false, version = "=0.6.2" }
 arcium-macros = "=0.6.2"
 arcium-anchor = "=0.6.2"
 arcis = "0.6.2"
+borsh_v1 = { package = "borsh", version = "1.6.0" }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }

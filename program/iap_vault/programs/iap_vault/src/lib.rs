@@ -1,47 +1,52 @@
 use anchor_lang::prelude::*;
-
-use arcium_anchor::prelude::*;
-use arcis::*;
+use arcium_anchor::prelude::*; // This brings in the Arcium macros
+use arcis::*; // This brings in the .to_mxe() function
 
 declare_id!("9tNsfwyCDBFZRmjuYty4AHpWXziRa26nGjtJAd6qmiR1");
 
+#[program] // <--- 1. CRITICAL MISSING PIECE
+pub mod iap_vault {
+    use super::*;
 
-mod iap_vault {
-    use super::*; // Inherit imports from parent (anchor, arcis, etc.)
-
-    // 1. Define the Storage (The "Database")
-    // We store the user's tier. 
-    // Mxe<u8> means: "An encrypted number that only the Vault can see."
-    #[account] // Use standard Anchor macro
-    pub struct UserProfile {
-        pub tier: Mxe, // Mxe is not generic in arcis 0.6.2
-    }
-
-    // 2. The Logic (The "Functions")
-    // #[instruction] // Removed unrecognized attribute
+    // The function to store the data
     pub fn store_tier(
         ctx: Context<StoreTier>, 
-        encrypted_tier: Enc<Shared, u8>
-    ) -> anchor_lang::Result<()> {
-        // 'encrypted_tier' is what your Helius script sends (Shared Secret)
-        // We convert it to 'Mxe' (Vault Secret) so we can compute on it later.
+        encrypted_tier: Enc<Shared, u8> // Input: Data encrypted by the user (Helius script)
+    ) -> Result<()> {
         
-        // let vault_tier = encrypted_tier.to_mxe(); // Method not found
-        // Stubbing for compilation check
-        let vault_tier: Mxe = todo!("Implement conversion from Enc<Shared, u8> to Mxe"); 
+        // 2. CONVERSION: Lift from "Shared" (User) to "Mxe" (Vault)
+        // This function exists in the 'arcis' crate traits
+        let vault_tier = encrypted_tier.to_mxe(); 
         
-        // Save to the state
+        // 3. STORAGE: Save it to the account
         ctx.accounts.state.tier = vault_tier;
         
         Ok(())
     }
 }
 
-use iap_vault::UserProfile;
+// 4. THE STORAGE STRUCTURE
+#[account]
+pub struct UserProfile {
+    // We use Enc<Mxe, u8> instead of just Mxe
+    // This says: "An encrypted u8 integer stored on the MXE"
+    pub tier: Enc<Mxe, u8>, 
+}
 
-// 3. The Context (Who can call this?)
+// 5. THE CONTEXT (Your Logic was correct here!)
 #[derive(Accounts)]
 pub struct StoreTier<'info> {
-    #[account(mut)]
+    #[account(
+        init_if_needed, 
+        payer = user, 
+        space = 8 + 32, // Discriminator + Encrypted Pointer Size
+        seeds = [b"user_profile", user.key().as_ref()], 
+        bump
+    )]
     pub state: Account<'info, UserProfile>,
+
+    #[account(mut)]
+    pub user: Signer<'info>, 
+    
+    pub system_program: Program<'info, System>,
 }
