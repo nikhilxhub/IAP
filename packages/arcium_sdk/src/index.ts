@@ -10,6 +10,19 @@ import {
 export type Tier = "BRONZE_TIER" | "SILVER_TIER" | "GOLD_TIER" | "PLATINUM_TIER";
 
 /**
+ * Interest Profile containing all wallet activity metrics
+ * This represents the complete "Interest Graph" for a user
+ */
+export interface InterestProfile {
+    tier: Tier;
+    nftCount: number;
+    solBalance: number; // SOL balance
+    tradingVolume: number; // USD equivalent trading volume (from DEX swaps)
+    tokenHoldings: number; // Count of unique token holdings (SPL tokens)
+    defiInteractions: number; // Count of DeFi protocol interactions
+}
+
+/**
  * Maps tier string to numeric value for encryption
  * BRONZE = 0, SILVER = 1, GOLD = 2, PLATINUM = 3
  * (Matches Arcium v0.5 standard for BigInt storage)
@@ -57,6 +70,7 @@ export class ArciumHander {
     /**
      * Scrambles the Tier and prepares it for the vault
      * @param tierValue - Either a numeric tier (0-3) or a Tier string
+     * @deprecated Use encryptInterestProfile() instead for full profile encryption
      */
     encryptTier(tierValue: number | Tier) {
         if (!this.cipher) throw new Error("Encryption not initialized");
@@ -75,6 +89,53 @@ export class ArciumHander {
             ciphertext,
             nonce,
             clientPubKey: this.clientPubKey
+        };
+    }
+
+    /**
+     * Encrypts the full Interest Profile for storage in Arcium MXE
+     * Encrypts all 6 fields: tier, nftCount, solBalance, tradingVolume, tokenHoldings, defiInteractions
+     * 
+     * @param profile - The InterestProfile to encrypt
+     * @returns Encrypted data structure ready for on-chain storage
+     */
+    encryptInterestProfile(profile: InterestProfile) {
+        if (!this.cipher) throw new Error("Encryption not initialized");
+        
+        // Convert tier string to number
+        const numericTier = tierToNumber(profile.tier);
+        
+        // Convert SOL balance to lamports (1 SOL = 1_000_000_000 lamports)
+        const solBalanceLamports = Math.floor(profile.solBalance * 1_000_000_000);
+        
+        // Convert trading volume to cents (1 USD = 100 cents) for integer storage
+        // Using cents to preserve 2 decimal places of precision
+        const tradingVolumeCents = Math.floor(profile.tradingVolume * 100);
+        
+        // Prepare all 6 fields as BigInt array for encryption
+        // Order: tier, nftCount, solBalanceLamports, tradingVolumeCents, tokenHoldings, defiInteractions
+        const plaintextValues: bigint[] = [
+            BigInt(numericTier),                    // u8: 0-3
+            BigInt(Math.floor(profile.nftCount)),   // u32: NFT count
+            BigInt(solBalanceLamports),             // u64: SOL balance in lamports
+            BigInt(tradingVolumeCents),             // u64: Trading volume in cents
+            BigInt(Math.floor(profile.tokenHoldings)), // u32: Token holdings count
+            BigInt(Math.floor(profile.defiInteractions)) // u32: DeFi interactions count
+        ];
+        
+        // Nonce is a random 'salt' to make encryption unique every time
+        const nonce = crypto.getRandomValues(new Uint8Array(16));
+        
+        // Encrypt all 6 values as a single array
+        // This will produce ciphertext that can be stored as SharedEncryptedStruct<6> in Rust
+        const ciphertext = this.cipher.encrypt(plaintextValues, nonce);
+        
+        return {
+            ciphertext,
+            nonce,
+            clientPubKey: this.clientPubKey,
+            // Include field count for validation
+            fieldCount: 6
         };
     }
 }
